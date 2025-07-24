@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  faq_backend:
+    build: .
+    container_name: faq_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_API_URL=http://host.docker.internal:11434
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./faq_data/faqs.txt:/app/faq_data/faqs.txt
+      - ./output/user_messages.txt:/app/output/user_messages.txt
+    restart: unless-stopped 
