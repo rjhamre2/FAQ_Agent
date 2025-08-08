@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Form
 from pydantic import BaseModel
 import time
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +40,22 @@ app = FastAPI()
 class Question(BaseModel):
     question: str
 
+class OnboardUserRequest(BaseModel):
+    user_id: str
+    email: str | None = None
+    display_name: str | None = None
+    test: bool | None = None
+    message: str | None = None
+
+class AskQuestionRequest(BaseModel):
+    user_id: str
+    comp_name: str
+    specialization: str
+    question: str
+
+class UserIdRequest(BaseModel):
+    user_id: str
+
 origins = [
     "http://localhost:3000",  # Example: React frontend running locally
     "https://nimbleai.in",  # Example: Deployed frontend
@@ -68,9 +84,9 @@ print(f"Loaded existing FAISS index from {VECTOR_DB_PATH}")
 #all_vectors = index.reconstruct_n(0, num_vectors)  # Shape: [num_vectors, dims]
 
 @app.post("/ask")
-async def ask_question(user_id:str,comp_name:str, specialization:str, q: Question):
+async def ask_question(request: AskQuestionRequest):
     BASE_PROMPT = f"""
-Role: You are {comp_name}'s chat assistant, {comp_name} is a company that specializes in {specialization}. Your task is to respond in a way that helps users understand the value of using AI chatbots.
+Role: You are {request.comp_name}'s chat assistant, {request.comp_name} is a company that specializes in {request.specialization}. Your task is to respond in a way that helps users understand the value of using AI chatbots.
 
 Instructions:
 1. Only use greetings when you are greeted by the user.
@@ -84,9 +100,9 @@ Instructions:
 
 User Prompt:
 """
-    vectorstore_path = os.path.join("user_data", user_id, "vectorstore")
+    vectorstore_path = os.path.join("user_data", request.user_id, "vectorstore")
 
-    user_messages_path = os.path.join("user_data", user_id, "conversations", "user_messages.txt")
+    user_messages_path = os.path.join("user_data", request.user_id, "conversations", "user_messages.txt")
 
     vectorstore = FAISS.load_local(
     folder_path = vectorstore_path,
@@ -99,10 +115,10 @@ User Prompt:
 
     start_time = time.time()
     readable_time = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
-    save_text_background(user_messages_path, readable_time + " " + q.question + '\n')
+    save_text_background(user_messages_path, readable_time + " " + request.question + '\n')
     
 #    response = qa_chain.run(q.question)
-    question = q.question
+    question = request.question
     print(f"OLLAMA_HOST: {OLLAMA_HOST}")
     embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST)
     query_embedding = embeddings.embed_query(question)
@@ -141,9 +157,9 @@ User Prompt:
                }
             }
 
-@app.get("/faqs", response_class=PlainTextResponse)
-async def get_faqs(user_id:str):
-    faqs_path = os.path.join("user_data", user_id, "faq_data", "faqs.txt")
+@app.post("/faqs", response_class=PlainTextResponse)
+async def get_faqs(request: UserIdRequest):
+    faqs_path = os.path.join("user_data", request.user_id, "faq_data", "faqs.txt")
     if not os.path.exists(faqs_path):
         return ""
     async with aiofiles.open(faqs_path, mode='r') as f:
@@ -151,16 +167,27 @@ async def get_faqs(user_id:str):
     return content
 
 @app.post("/faqs")
-async def post_faqs(user_id:str, file: UploadFile = File(...)):
+async def post_faqs(request: UserIdRequest):
+    # This endpoint is for JSON requests (getting FAQs)
+    faqs_path = os.path.join("user_data", request.user_id, "faq_data", "faqs.txt")
+    if not os.path.exists(faqs_path):
+        return {"status": "success", "faqs": ""}
+    async with aiofiles.open(faqs_path, mode='r') as f:
+        content = await f.read()
+    return {"status": "success", "faqs": content}
+
+@app.post("/faqs/upload")
+async def upload_faqs(file: UploadFile = File(...), user_id: str = Form(...)):
+    # Dedicated endpoint for file uploads with user_id from FormData
     faqs_path = os.path.join("user_data", user_id, "faq_data", "faqs.txt")
     content = await file.read()
     async with aiofiles.open(faqs_path, mode='wb') as f:
         await f.write(content)
-    return {"status": "success"}
+    return {"status": "success", "message": "File uploaded successfully"}
 
-@app.get("/user_messages", response_class=PlainTextResponse)
-async def get_user_messages(user_id:str):
-    user_messages_path = os.path.join("user_data", user_id, "conversations", "user_messages.txt")
+@app.post("/user_messages", response_class=PlainTextResponse)
+async def get_user_messages(request: UserIdRequest):
+    user_messages_path = os.path.join("user_data", request.user_id, "conversations", "user_messages.txt")
     if not os.path.exists(user_messages_path):
         return ""
     async with aiofiles.open(user_messages_path, mode='r') as f:
@@ -168,23 +195,48 @@ async def get_user_messages(user_id:str):
     return content
 
 @app.post("/train")
-async def post_train_faqs(user_id:str):
-    print(f"Training the model for user {user_id}")
-    train(user_id)
+async def post_train_faqs(request: UserIdRequest):
+    print(f"Training the model for user {request.user_id}")
+    train(request.user_id)
     return {"status": "success"}
 
 @app.post("/onboard_user")
-async def post_onboard_user(user_id:str):
-    user_path = os.path.join("user_data", user_id)
-    os.makedirs(user_path, exist_ok=True)
+async def post_onboard_user(request: OnboardUserRequest):
+    try:
+        user_id = request.user_id
+        email = request.email
+        display_name = request.display_name
+        
+        print(f"Onboarding user: {user_id} ({email})")
+        
+        user_path = os.path.join("user_data", user_id)
+        os.makedirs(user_path, exist_ok=True)
 
-    user_faqs_path = os.path.join(user_path, "faq_data")
-    os.makedirs(user_faqs_path, exist_ok=True)
+        user_faqs_path = os.path.join(user_path, "faq_data")
+        os.makedirs(user_faqs_path, exist_ok=True)
 
-    user_vectorstore_path = os.path.join(user_path, "vectorstore")
-    os.makedirs(user_vectorstore_path, exist_ok=True)
+        user_vectorstore_path = os.path.join(user_path, "vectorstore")
+        os.makedirs(user_vectorstore_path, exist_ok=True)
 
-    user_messages_path = os.path.join(user_path, "conversations")
-    os.makedirs(user_messages_path, exist_ok=True)
+        user_messages_path = os.path.join(user_path, "conversations")
+        os.makedirs(user_messages_path, exist_ok=True)
 
-    return {"status": "success"}
+        return {
+            "success": True,
+            "message": "User onboarded successfully",
+            "user_id": user_id
+        }
+    except Exception as e:
+        print(f"Onboarding error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/test")
+async def test_endpoint(request: dict):
+    return {
+        "success": True,
+        "message": "Test endpoint working!",
+        "received_data": request
+    }
