@@ -9,7 +9,12 @@ import numpy as np
 from vars import INPUT_FILE, VECTOR_DB_PATH
 import os
 
-def create_vectorstore(faq_path=INPUT_FILE, persist_directory=VECTOR_DB_PATH):
+def create_vectorstore(user_id:str, faq_path=INPUT_FILE, persist_directory=VECTOR_DB_PATH):
+
+    faq_path = os.path.join("user_data", user_id, "faq_data", "faqs.txt")
+    persist_directory = os.path.join("user_data", user_id, "vectorstore")
+
+    print(f"Creating vectorstore from {faq_path} to {persist_directory}")
     try:
         # Step 1: Read and parse the FAQ file
         if not os.path.exists(faq_path):
@@ -41,17 +46,18 @@ def create_vectorstore(faq_path=INPUT_FILE, persist_directory=VECTOR_DB_PATH):
                     }
                 )
                 documents.append(doc)
-
+        print(f"Parsed {len(documents)} documents from the FAQ file.")
         if not documents:
             return {"status": "error", "code": 2, "message": "No documents parsed from the FAQ file."}
 
         # Step 2: Get embedding model
-        embeddings = OllamaEmbeddings(model="nomic-embed-text")
-
+        OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST)
+        print(f"Using embedding model: {embeddings}")
         # Step 3: Create FAISS vectorstore
         vectorstore = FAISS.from_documents(documents, embeddings)
         faiss_index = vectorstore.index
-
+        print(f"Created FAISS vectorstore with {faiss_index.ntotal} vectors.")
         # Step 4: Normalize vectors
         vectors = np.array([faiss_index.reconstruct(i) for i in range(faiss_index.ntotal)]).astype("float32")
         faiss.normalize_L2(vectors)
@@ -59,9 +65,10 @@ def create_vectorstore(faq_path=INPUT_FILE, persist_directory=VECTOR_DB_PATH):
         new_index = faiss.IndexFlatL2(dimension)
         new_index.add(vectors)
         vectorstore.index = new_index
-
+    
         # Step 5: Save index
         vectorstore.save_local(persist_directory)
+        print(f"Saved vectorstore to {persist_directory}")
         return {"status": "success", "code": 0, "message": "Vectorstore created successfully."}
 
     except Exception as e:

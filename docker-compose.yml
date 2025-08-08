@@ -1,4 +1,4 @@
-version: '3.8'
+#version: '3.8'
 services:
   faq_backend:
     build: .
@@ -6,9 +6,24 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OLLAMA_API_URL=http://host.docker.internal:11434
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_HOST=http://ollama:11434 # 👈 Tell your app where to find Ollama
     volumes:
-      - ./faq_data/faqs.txt:/app/faq_data/faqs.txt
-      - ./output/user_messages.txt:/app/output/user_messages.txt
+      - ./user_data:/app/user_data
     restart: unless-stopped 
+    depends_on:
+      - ollama # 👈 Wait for Ollama container to be up before starting app
+
+  # Ollama LLM service
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama # 👈 Create this file to define the Ollama image
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama # persistent model cache
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

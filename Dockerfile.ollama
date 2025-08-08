@@ -3,4 +3,4 @@ FROM ollama/ollama
 CMD ["serve"]
 # Optional: preload model
 # RUN ollama pull gemma:2b
-# ollama pull nomic-embed-text
+#RUN ollama pull nomic-embed-text

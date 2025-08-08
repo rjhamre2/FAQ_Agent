@@ -1,5 +1,5 @@
 from create_vectorstore import create_vectorstore
 
-if __name__ == "__main__":
-    result = create_vectorstore()
+def train(user_id: str):
+    result = create_vectorstore(user_id)
     print(result)

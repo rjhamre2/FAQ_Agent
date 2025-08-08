@@ -57,15 +57,19 @@ app.add_middleware(
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
 
-
+vectorstore = FAISS.load_local(
+    folder_path = VECTOR_DB_PATH,
+    embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST),
+    allow_dangerous_deserialization=True  # Required for FAISS
+)
 print(f"Loaded existing FAISS index from {VECTOR_DB_PATH}")
 
-#docs = vectorstore.docstore._dict
-#index = vectorstore.index
-#num_vectors = index.ntotal
-#print(f"faiss  dimensions: {index.d}, Number of vectors: {num_vectors}")
+docs = vectorstore.docstore._dict
+index = vectorstore.index
+num_vectors = index.ntotal
+print(f"faiss  dimensions: {index.d}, Number of vectors: {num_vectors}")
 #print(f"query_vector  dimensions: {query_vector.shape}")
-#all_vectors = index.reconstruct_n(0, num_vectors)  # Shape: [num_vectors, dims]
+all_vectors = index.reconstruct_n(0, num_vectors)  # Shape: [num_vectors, dims]
 
 BASE_PROMPT = """
 Role: You are NimbleAI's chat assistant, NimbleAI is a company that specializes in automating customer support services using AI. Your task is to respond in a way that helps users understand the value of using AI chatbots.
@@ -85,24 +89,10 @@ User Prompt:
 
 
 @app.post("/ask")
-async def ask_question(user_id:str, q: Question):
-
-    vectorstore_path = os.path.join("user_data", user_id, "vectorstore")
-
-    user_messages_path = os.path.join("user_data", user_id, "conversations", "user_messages.txt")
-
-    vectorstore = FAISS.load_local(
-    folder_path = vectorstore_path,
-    embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST),
-    allow_dangerous_deserialization=True  # Required for FAISS
-    )
-
-    docs = vectorstore.docstore._dict
-    
-
+async def ask_question(q: Question):
     start_time = time.time()
     readable_time = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
-    save_text_background(user_messages_path, readable_time + " " + q.question + '\n')
+    save_text_background(OUTPUT_FILE, readable_time + " " + q.question + '\n')
     
 #    response = qa_chain.run(q.question)
     question = q.question
@@ -145,8 +135,8 @@ async def ask_question(user_id:str, q: Question):
             }
 
 @app.get("/faqs", response_class=PlainTextResponse)
-async def get_faqs(user_id:str):
-    faqs_path = os.path.join("user_data", user_id, "faq_data", "faqs.txt")
+async def get_faqs():
+    faqs_path = os.path.join("faq_data", "faqs.txt")
     if not os.path.exists(faqs_path):
         return ""
     async with aiofiles.open(faqs_path, mode='r') as f:
@@ -154,40 +144,23 @@ async def get_faqs(user_id:str):
     return content
 
 @app.post("/faqs")
-async def post_faqs(user_id:str, file: UploadFile = File(...)):
-    faqs_path = os.path.join("user_data", user_id, "faq_data", "faqs.txt")
+async def post_faqs(file: UploadFile = File(...)):
+    faqs_path = os.path.join("faq_data", "faqs.txt")
     content = await file.read()
     async with aiofiles.open(faqs_path, mode='wb') as f:
         await f.write(content)
     return {"status": "success"}
 
 @app.get("/user_messages", response_class=PlainTextResponse)
-async def get_user_messages(user_id:str):
-    user_messages_path = os.path.join("user_data", user_id, "conversations", "user_messages.txt")
-    if not os.path.exists(user_messages_path):
+async def get_user_messages():
+    messages_path = os.path.join("output", "user_messages.txt")
+    if not os.path.exists(messages_path):
         return ""
-    async with aiofiles.open(user_messages_path, mode='r') as f:
+    async with aiofiles.open(messages_path, mode='r') as f:
         content = await f.read()
     return content
 
 @app.post("/train")
-async def post_train_faqs(user_id:str):
-    print(f"Training the model for user {user_id}")
-    train(user_id)
-    return {"status": "success"}
-
-@app.post("/onboard_user")
-async def post_onboard_user(user_id:str):
-    user_path = os.path.join("user_data", user_id)
-    os.makedirs(user_path, exist_ok=True)
-
-    user_faqs_path = os.path.join(user_path, "faq_data")
-    os.makedirs(user_faqs_path, exist_ok=True)
-
-    user_vectorstore_path = os.path.join(user_path, "vectorstore")
-    os.makedirs(user_vectorstore_path, exist_ok=True)
-
-    user_messages_path = os.path.join(user_path, "conversations")
-    os.makedirs(user_messages_path, exist_ok=True)
-
+async def post_train_faqs():
+    train()
     return {"status": "success"}

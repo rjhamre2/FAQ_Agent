@@ -1,5 +1,10 @@
+Q: Who are you?
+A: I'm Rupesh and this is a test question.
+
+
+
 Q: What is NimbleAI?
-A: NimbleAI is an AI-powered world class chat assistant that helps businesses reply instantly to customers on WhatsApp, Instagram, and websites. It can answer common questions, collect leads, and escalate to your team when needed.
+A: NimbleAI is an AI-powered chat assistant that helps businesses reply instantly to customers on WhatsApp, Instagram, and websites. It can answer common questions, collect leads, and escalate to your team when needed.
 L: https://nimbleai.in/
 
 Q:How does NimbleAI work? 
@@ -13,7 +18,7 @@ Q:What channels does it support?
 A:NimbleAI works on WhatsApp, Instagram DMs, and your website chat.
 
 Q:Is it really AI-powered?
-A:NimbleAI uses in House AI models to understand natural language and reply intelligently to your customers.
+A:NimbleAI uses advanced AI models to understand natural language and reply intelligently to your customers.
 
 Q:How is NimbleAI different from other chatbots?
 A:Unlike rule-based bots, NimbleAI understands context, supports multiple languages, and can handle a wide variety of queries without manual scripting.
