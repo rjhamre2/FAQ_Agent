@@ -67,14 +67,16 @@ print(f"Loaded existing FAISS index from {VECTOR_DB_PATH}")
 #print(f"query_vector  dimensions: {query_vector.shape}")
 #all_vectors = index.reconstruct_n(0, num_vectors)  # Shape: [num_vectors, dims]
 
-BASE_PROMPT = """
-Role: You are NimbleAI's chat assistant, NimbleAI is a company that specializes in automating customer support services using AI. Your task is to respond in a way that helps users understand the value of using AI chatbots.
+@app.post("/ask")
+async def ask_question(user_id:str,comp_name:str, specialization:str, q: Question):
+    BASE_PROMPT = f"""
+Role: You are {comp_name}'s chat assistant, {comp_name} is a company that specializes in {specialization}. Your task is to respond in a way that helps users understand the value of using AI chatbots.
 
 Instructions:
 1. Only use greetings when you are greeted by the user.
 2. Use a friendly and approachable tone.
 3. Provide clear and helpful answers to the user's question.
-4. If the question is unrelated to NimbleAI, politely let the user know that you can only assist with NimbleAI-related queries.
+4. If the question is unrelated to {comp_name}, politely let the user know that you can only assist with {comp_name}-related queries.
 5. Avoid using any special characters in your response.
 6. Keep your response concise and focused.
 7. The response must be as short as possible.
@@ -82,11 +84,6 @@ Instructions:
 
 User Prompt:
 """
-
-
-@app.post("/ask")
-async def ask_question(user_id:str, q: Question):
-
     vectorstore_path = os.path.join("user_data", user_id, "vectorstore")
 
     user_messages_path = os.path.join("user_data", user_id, "conversations", "user_messages.txt")
@@ -98,7 +95,7 @@ async def ask_question(user_id:str, q: Question):
     )
 
     docs = vectorstore.docstore._dict
-    
+
 
     start_time = time.time()
     readable_time = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
