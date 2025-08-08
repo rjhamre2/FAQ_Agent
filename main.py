@@ -49,9 +49,12 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+
 vectorstore = FAISS.load_local(
     folder_path = VECTOR_DB_PATH,
-    embeddings = OllamaEmbeddings(model="nomic-embed-text"),
+    embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST),
     allow_dangerous_deserialization=True  # Required for FAISS
 )
 print(f"Loaded existing FAISS index from {VECTOR_DB_PATH}")
@@ -88,7 +91,8 @@ async def ask_question(q: Question):
     
 #    response = qa_chain.run(q.question)
     question = q.question
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    print(f"OLLAMA_HOST: {OLLAMA_HOST}")
+    embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST)
     query_embedding = embeddings.embed_query(question)
     # Convert to 2D float32 array
     query_vector = np.array([query_embedding], dtype="float32")  # shape (1, d)

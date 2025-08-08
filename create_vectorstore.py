@@ -46,7 +46,8 @@ def create_vectorstore(faq_path=INPUT_FILE, persist_directory=VECTOR_DB_PATH):
             return {"status": "error", "code": 2, "message": "No documents parsed from the FAQ file."}
 
         # Step 2: Get embedding model
-        embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_HOST)
 
         # Step 3: Create FAISS vectorstore
         vectorstore = FAISS.from_documents(documents, embeddings)
