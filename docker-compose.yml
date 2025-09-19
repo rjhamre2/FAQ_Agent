@@ -7,11 +7,13 @@ services:
       - "8000:8000"
     environment:
       - OLLAMA_HOST=http://ollama:11434 # 👈 Tell your app where to find Ollama
+      - DATABASE_URL=postgresql+psycopg://postgres@db:5432/whatsapp_chats
     volumes:
-      - ./user_data:/app/user_data
+      - ./vector_db:/app/vector_db
     restart: unless-stopped 
     depends_on:
       - ollama # 👈 Wait for Ollama container to be up before starting app
+      - db
 
   # Ollama LLM service
   ollama:
@@ -25,5 +27,17 @@ services:
       - ollama_data:/root/.ollama # persistent model cache
     restart: unless-stopped
 
+  db:
+    image: postgres:16-alpine
+    container_name: faq_postgres
+    environment:
+      - POSTGRES_DB=whatsapp_chats
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   ollama_data:
+  pg_data:
