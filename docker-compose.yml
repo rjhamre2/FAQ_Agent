@@ -7,7 +7,8 @@ services:
       - "8000:8000"
     environment:
       - OLLAMA_HOST=http://ollama:11434 # 👈 Tell your app where to find Ollama
-      - DATABASE_URL=postgresql+psycopg://postgres@db:5432/whatsapp_chats
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/whatsapp_chats
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./vector_db:/app/vector_db
     restart: unless-stopped 
@@ -32,6 +33,8 @@ services:
     container_name: faq_postgres
     environment:
       - POSTGRES_DB=whatsapp_chats
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
       - "5432:5432"
     volumes:

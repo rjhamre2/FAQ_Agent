@@ -2,37 +2,48 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_core.vectorstores import VectorStore
 from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import faiss
 from sklearn.preprocessing import normalize
 import time
 import numpy as np
-from vars import INPUT_FILE, VECTOR_DB_PATH
-from db import SessionLocal, Faq
+from vars import VECTOR_DB_PATH
 import os
 
-def create_vectorstore(user_id:str, faq_path=INPUT_FILE, persist_directory=VECTOR_DB_PATH):
+def create_vectorstore(user_id:str, content:str, persist_directory=VECTOR_DB_PATH):
     persist_directory = os.path.join(VECTOR_DB_PATH, user_id)
     os.makedirs(persist_directory, exist_ok=True)
     print(f"Creating vectorstore for user {user_id} to {persist_directory}")
     try:
-        # Step 1: Read FAQs from database
-        db = SessionLocal()
-        try:
-            rows = db.query(Faq).filter(Faq.user_id == user_id).all()
-        finally:
-            db.close()
-
         documents = []
-        for row in rows:
-            if row.question and row.answer:
-                doc = Document(
-                    page_content=row.question,
-                    metadata={
-                        "answer": row.answer,
-                        "link": row.link or ""
-                    }
-                )
-                documents.append(doc)
+
+        # Use the provided content directly
+        print(f"Using provided content for training")
+        
+        # Create a text splitter to break content into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,  # Maximum size of each chunk
+            chunk_overlap=100,  # Overlap between chunks for context
+            length_function=len,
+            separators=["\n\n", "\n", " ", ""]  # Split on paragraphs, lines, then words
+        )
+        
+        # Split the content into multiple documents
+        content_chunks = text_splitter.split_text(content)
+        print(f"Split content into {len(content_chunks)} chunks")
+        
+        # Create documents for each chunk
+        for i, chunk in enumerate(content_chunks):
+            doc = Document(
+                page_content=chunk,
+                metadata={
+                    "content_type": "paragraph",
+                    "user_id": user_id,
+                    "chunk_index": i,
+                    "total_chunks": len(content_chunks)
+                }
+            )
+            documents.append(doc)
         print(f"Parsed {len(documents)} documents from the database.")
         if not documents:
             return {"status": "error", "code": 2, "message": "No documents parsed from the FAQ file."}

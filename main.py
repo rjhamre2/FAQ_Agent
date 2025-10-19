@@ -54,6 +54,20 @@ class OnboardUserRequest(BaseModel):
     test: bool | None = None
     message: str | None = None
 
+class TrainRequest(BaseModel):
+    user_id: str
+    content: str
+    additionalProp1: dict = {}
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "user_id": "user123",
+                "content": "This is our company information about products and services...",
+                "additionalProp1": {"metadata": "any additional data"}
+            }
+        }
+
 class AskQuestionRequest(BaseModel):
     user_id: str
     comp_name: str
@@ -213,13 +227,29 @@ User Prompt:
 
     # Normalize in-place
     faiss.normalize_L2(query_vector)
-    k = 1  # number of nearest neighbors
+    k = 3  # number of nearest neighbors
     distances, indices = vectorstore.index.search(query_vector, k)
-    doc_id = vectorstore.index_to_docstore_id[indices[0][0]]
-    # Step 2: Fetch the document from the docstore
-    document = docs[doc_id]
+    
+    # Get multiple relevant chunks instead of just one
+    relevant_chunks = []
+    for i in range(k):
+        if indices[0][i] != -1:  # Check for valid index (-1 means no result)
+            doc_id = vectorstore.index_to_docstore_id[indices[0][i]]
+            document = docs[doc_id]
+            relevant_chunks.append({
+                'content': document.page_content,
+                'metadata': document.metadata,
+                'distance': distances[0][i]
+            })
+    
+    # Combine the most relevant chunks
+    combined_content = "\n\n".join([chunk['content'] for chunk in relevant_chunks])
+    combined_metadata = {
+        'chunk_count': len(relevant_chunks),
+        'distances': [chunk['distance'] for chunk in relevant_chunks]
+    }
 
-    openai_question = question + "\n" + "\n if suitable to user's question/greeting use following info: "+ str(document.metadata)
+    openai_question = question + "\n" + "\n if suitable to user's question/greeting use following info: " + combined_content
     oai_time_start = time.time()
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
@@ -234,7 +264,7 @@ User Prompt:
 
     end_time = time.time()
     ans = response.choices[0].message.content
-    
+
     # Store the AI response in the database
     try:
         db = SessionLocal()
@@ -316,66 +346,6 @@ async def get_faqs(request: UserIdRequest):
     finally:
         db.close()
 
-@app.post("/faqs")
-async def post_faqs(request: UserIdRequest):
-    try:
-        db = SessionLocal()
-        rows = db.query(Faq).filter(Faq.user_id == request.user_id).order_by(Faq.id.asc()).all()
-        blocks: list[str] = []
-        for r in rows:
-            block_lines = [
-                f"Q: {r.question}",
-                f"A: {r.answer}"
-            ]
-            if r.link:
-                block_lines.append(f"L: {r.link}")
-            blocks.append("\n".join(block_lines))
-        return {"status": "success", "faqs": "\n\n".join(blocks)}
-    finally:
-        db.close()
-
-@app.post("/faqs/upload")
-async def upload_faqs(file: UploadFile = File(...), user_id: str = Form(...)):
-    content_bytes = await file.read()
-    text = content_bytes.decode("utf-8", errors="ignore")
-
-    # Parse blocks of Q/A/L separated by blank line
-    blocks = [b.strip() for b in text.strip().split("\n\n") if b.strip()]
-
-    try:
-        db = SessionLocal()
-        # Ensure user exists
-        user = db.get(User, user_id)
-        if user is None:
-            user = User(user_id=user_id)
-            db.add(user)
-            db.flush()
-
-        # Replace existing FAQs for user
-        db.query(Faq).filter(Faq.user_id == user_id).delete(synchronize_session=False)
-
-        for block in blocks:
-            q = a = l = None
-            for line in block.splitlines():
-                line = line.strip()
-                if line.startswith("Q:"):
-                    q = line[2:].strip()
-                elif line.startswith("A:"):
-                    a = line[2:].strip()
-                elif line.startswith("L:"):
-                    l = line[2:].strip()
-            if q and a:
-                db.add(Faq(user_id=user_id, question=q, answer=a, link=l))
-        db.commit()
-        return {"status": "success", "message": "File uploaded successfully"}
-    except Exception as e:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
 
 @app.post("/user_messages", response_class=PlainTextResponse)
 async def get_user_messages(request: UserIdRequest):
@@ -421,10 +391,32 @@ async def get_conversation_history(request: UserIdRequest):
         db.close()
 
 @app.post("/train")
-async def post_train_faqs(request: UserIdRequest):
-    print(f"Training the model for user {request.user_id}")
-    train(request.user_id)
-    return {"status": "success"}
+async def post_train_faqs(request: TrainRequest):
+    print(f"Received request body: {request}")
+    
+    # Extract user_id and content from the request
+    user_id = request.user_id
+    content = request.content
+    
+    # Handle additional properties - they can contain any extra data
+    additional_props = {"additionalProp1": request.additionalProp1} if request.additionalProp1 else {}
+    
+    print(f"Training the model for user {user_id} with paragraph content")
+    if additional_props:
+        print(f"Additional properties received: {list(additional_props.keys())}")
+
+    try:
+        # Train the model directly with the content
+        # No database storage needed
+        train(user_id, content)
+        
+        return {
+            "status": "success", 
+            "message": "Model trained successfully",
+            "additional_properties_processed": len(additional_props)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/onboard_user")
 async def post_onboard_user(request: OnboardUserRequest):
