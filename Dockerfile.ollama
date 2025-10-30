@@ -1,0 +1,6 @@
+FROM ollama/ollama:latest
+
+# The base image already has the correct CMD, so we don't need to override it
+# Optional: preload model
+# RUN ollama pull gemma:2b
+# RUN ollama pull nomic-embed-text
