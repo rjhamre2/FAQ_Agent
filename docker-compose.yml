@@ -1,31 +1,30 @@
 #version: '3.8'
 services:
   faq_backend:
-    build: .
+    build: 
+      context: .
     container_name: faq_backend
     ports:
       - "8000:8000"
     environment:
-      - OLLAMA_HOST=http://ollama:11434 # 👈 Tell your app where to find Ollama
+      - OLLAMA_HOST=http://ollama:11434
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/whatsapp_chats
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./vector_db:/app/vector_db
     restart: unless-stopped 
     depends_on:
-      - ollama # 👈 Wait for Ollama container to be up before starting app
+      - ollama
       - db
 
   # Ollama LLM service
   ollama:
-    build:
-      context: .
-      dockerfile: Dockerfile.ollama # 👈 Create this file to define the Ollama image
+    image: ollama/ollama:latest
     container_name: ollama
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama # persistent model cache
+      - ollama_data:/root/.ollama
     restart: unless-stopped
 
   db:
